@@ -1,3 +1,25 @@
+/* TA1276AN I2C Bridge
+ * (2019) Martin Hejnfelt (martin@hejnfelt.com)
+ *
+ * For use with monitors that use the TA1276AN jungle IC.
+ * This changes the I2C communication from monitor MCUs
+ * that doesn't treat RGB like it should, to something
+ * that does. Basically it ensures that RGB Brightness
+ * and RGB Contrast are in sync with the "other"
+ * brightness and contrast values, plus kills the "HI BRT"
+ * bit which otherwise causes a somewhat dull picture (or
+ * close to black image when 75 Ohm terminations resistors
+ * are used (which they should).
+ * Connect the main I2C line of the monitors PCB to the 
+ * hardware I2C (TWI) pins and then specify the desired
+ * secondary I2C pins for the communication to the jungle.
+ * A speed Arduino is recommended, for now only tested on
+ * a 20MHz atmega2560 clone.
+ * 
+ * Requires the SoftI2CMaster library
+ * https://github.com/felias-fogg/SoftI2CMaster
+ */
+
 #define I2C_TIMEOUT 1000
 #define I2C_PULLUP 1
 #define SDA_PORT PORTA
@@ -6,50 +28,90 @@
 #define SCL_PIN 2 // = 24
 #include <SoftI2CMaster.h>
 #include <Wire.h>
+// Address in the datasheet is said to be 0x88 for write
+// and 0x89 for read. That is somewhat of a "mistake" as
+// i2c uses 7 bit addressing and the least significant bit
+// is read (1) or write (0). Thus the address is shifted once
+// to the right to get the "real" address which is then 44h/68
 #define TA1276AN_ADDR (68)
+#define SER_DEBUG_WRITE (1)
+//#define SER_DEBUG_READ (0)
+
+#define REG_UNICOLOR (0x00)
+#define REG_BRIGHTNESS (0x01)
+#define REG_RGB_BRIGHTNESS (0x05)
+#define REG_RGB_CONTRAST (0x06)
 
 void setup() {
-  Serial.begin(9600);
-  Serial.print("TA1276AN I2C Bridge");
+  bool iicinit = i2c_init();
+  Serial.begin(115200);
+  Serial.print("TA1276AN I2C Bridge\n");
   Wire.begin(TA1276AN_ADDR);
   Wire.onReceive(writeRequest);
   Wire.onRequest(readRequest);
-  if (!i2c_init()) Serial.println("I2C init failed");
+  if(!iicinit) Serial.println("I2C init failed");
 }
 
 void loop() {
-  delay(100);
+  delay(10);
 }
 
-void writeRequest(int howMany) {
-  Serial.print("Write ");
-  int bytes[howMany];
-  int p = 0;
-  while (Wire.available()) { // loop through all but the last
-    int c = Wire.read(); // receive byte as a character
-    bytes[p] = c;
-    ++p;
-    Serial.print(c,HEX); // print the character
-    Serial.print(",");
+void writeRegister(const uint8_t reg, const uint8_t val) {
+      i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
+      i2c_write(reg);
+      i2c_write(val);
+      i2c_stop(); 
+}
+
+void writeRequest(int byteCount) {
+  uint8_t reg = Wire.read();
+  uint8_t val = Wire.read();
+  switch(reg) {
+    case REG_RGB_BRIGHTNESS:
+    case REG_RGB_CONTRAST:
+      // Do nothing
+    break;
+    case REG_BRIGHTNESS:
+      writeRegister(reg,val);
+      // Write the same value to RGB Brightness register
+      writeRegister(REG_RGB_BRIGHTNESS,((val>>1)<<1));
+    break;
+    case REG_UNICOLOR:
+      writeRegister(reg,val);
+      // Write the same value to RGB Contrast register
+      // But make sure to kill most significant bit
+      // otherwise picture gets dark (at least for me)
+      writeRegister(REG_RGB_CONTRAST,val & 0x7F);
+    break;
+    default:
+      writeRegister(reg,val);
+    break;
   }
+#ifdef SER_DEBUG_WRITE
+  Serial.print("Write register: ");
+  Serial.print(reg,HEX);
+  Serial.print(" value: ");
+  Serial.print(val,HEX);
   Serial.print("\n");
-  if (!i2c_start_wait((TA1276AN_ADDR<<1)|I2C_WRITE)) {
-    Serial.println("I2C device busy");
-    delay(1000);
-    return;
-  }
-  for(int i = 0; i < p; ++i) {
-    i2c_write(bytes[i]);
-  }
-  i2c_stop();
+#endif
 }
 
 void readRequest() {
+  // Read requests to TA1276AN returns two bytes
+  // So we read those and replies. One would think
+  // this could give timing errors, but at least
+  // on atmega2560 @ 20MHz it doesn't
+  uint8_t r[2];
+  i2c_start((TA1276AN_ADDR<<1)|I2C_READ);
+  r[0] = i2c_read(false); // read one byte
+  r[1] = i2c_read(true); // read one byte and send NAK to terminate
+  i2c_stop(); // send stop condition
+  Wire.write(r,2);
+#ifdef SER_DEBUG_READ
   Serial.print("Read ");
-  while (Wire.available()) {
-    int c = Wire.read();
-    Serial.print(c,HEX);
-    Serial.print(",");
-  }
-  Serial.print("\n");  
+  Serial.print(r[0],HEX);
+  Serial.print(",");
+  Serial.print(r[1],HEX);
+  Serial.print("\n");
+#endif
 }
