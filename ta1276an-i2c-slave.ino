@@ -14,7 +14,7 @@
  * hardware I2C (TWI) pins and then specify the desired
  * secondary I2C pins for the communication to the jungle.
  * A speed Arduino is recommended, for now only tested on
- * a 20MHz atmega2560 clone.
+ * a 20MHz atmega2560 clone plus 16MHz Nano v3.0 clone.
  * 
  * Requires the SoftI2CMaster library
  * https://github.com/felias-fogg/SoftI2CMaster
@@ -22,10 +22,21 @@
 
 #define I2C_TIMEOUT 1000
 #define I2C_PULLUP 1
+
+// These work for a Mega2560
+/*
 #define SDA_PORT PORTA
 #define SDA_PIN 0 // = 22
 #define SCL_PORT PORTA
 #define SCL_PIN 2 // = 24
+*/
+
+// These work for Nano 3.0
+#define SDA_PORT PORTD
+#define SDA_PIN 4 // = PD4
+#define SCL_PORT PORTD
+#define SCL_PIN 5 // = PD5
+
 #include <SoftI2CMaster.h>
 #include <Wire.h>
 // Address in the datasheet is said to be 0x88 for write
