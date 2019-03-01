@@ -68,36 +68,10 @@ void loop() {
 }
 
 void writeRegister(const uint8_t reg, const uint8_t val) {
-      i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
-      i2c_write(reg);
-      i2c_write(val);
-      i2c_stop(); 
-}
-
-void writeRequest(int byteCount) {
-  uint8_t reg = Wire.read();
-  uint8_t val = Wire.read();
-  switch(reg) {
-    case REG_RGB_BRIGHTNESS:
-    case REG_RGB_CONTRAST:
-      // Do nothing
-    break;
-    case REG_BRIGHTNESS:
-      writeRegister(reg,val);
-      // Write the same value to RGB Brightness register
-      writeRegister(REG_RGB_BRIGHTNESS,((val>>1)<<1));
-    break;
-    case REG_UNICOLOR:
-      writeRegister(reg,val);
-      // Write the same value to RGB Contrast register
-      // But make sure to kill most significant bit
-      // otherwise picture gets dark (at least for me)
-      writeRegister(REG_RGB_CONTRAST,val & 0x7F);
-    break;
-    default:
-      writeRegister(reg,val);
-    break;
-  }
+  i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
+  i2c_write(reg);
+  i2c_write(val);
+  i2c_stop(); 
 #ifdef SER_DEBUG_WRITE
   Serial.print("Write register: ");
   Serial.print(reg,HEX);
@@ -105,6 +79,35 @@ void writeRequest(int byteCount) {
   Serial.print(val,HEX);
   Serial.print("\n");
 #endif
+}
+
+void writeRequest(int byteCount) {
+  uint8_t reg = Wire.read();
+  for(int i = 1; i < byteCount; ++i) {
+    uint8_t val = Wire.read();
+    switch(reg) {
+      case REG_RGB_BRIGHTNESS:
+      case REG_RGB_CONTRAST:
+        // Do nothing
+      break;
+      case REG_BRIGHTNESS:
+        writeRegister(reg,val);
+        // Write the same value to RGB Brightness register
+        writeRegister(REG_RGB_BRIGHTNESS,((val>>1)<<1));
+      break;
+      case REG_UNICOLOR:
+        writeRegister(reg,val);
+        // Write the same value to RGB Contrast register
+        // But make sure to kill most significant bit
+        // otherwise picture gets dark (at least for me)
+        writeRegister(REG_RGB_CONTRAST,val & 0x7F);
+      break;
+      default:
+        writeRegister(reg,val);
+      break;
+    }
+    ++reg;
+  }
 }
 
 void readRequest() {
