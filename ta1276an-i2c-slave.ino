@@ -18,7 +18,13 @@
  * 
  * Requires the SoftI2CMaster library
  * https://github.com/felias-fogg/SoftI2CMaster
+ * 
+ * Monitors tested:
+ * JVC DT-V100CG (initial version)
+ * JVC TM-H1375SU (version 1.1)
  */
+
+// Version 1.1
 
 #define I2C_TIMEOUT 1000
 #define I2C_PULLUP 1
@@ -81,9 +87,59 @@ void writeRegister(const uint8_t reg, const uint8_t val) {
 #endif
 }
 
+uint8_t brightness = 0x80;
+uint8_t contrast = 0x80;
+
 void writeRequest(int byteCount) {
-  uint8_t reg = Wire.read();
-  for(int i = 1; i < byteCount; ++i) {
+  if(byteCount > 2) {
+    uint8_t reg = Wire.read();
+    uint8_t bc = 1;
+    Serial.print("Bulk write: start reg: ");
+    Serial.print(reg,HEX);
+    Serial.print(" ");
+    i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
+    i2c_write(reg);
+    do {
+      uint8_t val = Wire.read();
+      Serial.print(val,HEX);
+      switch(reg) {
+        case REG_RGB_BRIGHTNESS:
+          {
+            uint8_t v = (brightness>>1)<<1; 
+            i2c_write(v);
+            Serial.print("(");
+            Serial.print(v,HEX);
+            Serial.print(")");
+          }
+        break;
+        case REG_RGB_CONTRAST:
+          {
+            uint8_t v = contrast & 0x7F;
+            i2c_write(v);
+            Serial.print("(");
+            Serial.print(v,HEX);
+            Serial.print(")");
+          }
+        break;
+        case REG_BRIGHTNESS:
+          brightness = val;
+          i2c_write(val);
+          break;
+        case REG_UNICOLOR:
+          contrast = val;
+          i2c_write(val);          
+        break;
+        default:
+          i2c_write(val);
+        break;
+      }
+      ++bc;
+      ++reg;
+    } while(bc < byteCount);
+    i2c_stop();
+    Serial.print("\n");
+  } else {
+    uint8_t reg = Wire.read();
     uint8_t val = Wire.read();
     switch(reg) {
       case REG_RGB_BRIGHTNESS:
@@ -106,7 +162,6 @@ void writeRequest(int byteCount) {
         writeRegister(reg,val);
       break;
     }
-    ++reg;
   }
 }
 
