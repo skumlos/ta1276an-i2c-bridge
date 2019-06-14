@@ -18,7 +18,14 @@
  * 
  * Requires the SoftI2CMaster library
  * https://github.com/felias-fogg/SoftI2CMaster
+ * 
+ * Monitors tested:
+ * JVC DT-V100CG (initial version)
+ * JVC TM-H1375SU (version 1.1)
+ * JVC TM-1011G (version 1.1)
  */
+
+// Version 1.1
 
 #define I2C_TIMEOUT 1000
 #define I2C_PULLUP 1
@@ -45,8 +52,8 @@
 // is read (1) or write (0). Thus the address is shifted once
 // to the right to get the "real" address which is then 44h/68
 #define TA1276AN_ADDR (68)
-#define SER_DEBUG_WRITE (1)
-//#define SER_DEBUG_READ (0)
+//#define SER_DEBUG_WRITE
+//#define SER_DEBUG_READ
 
 #define REG_UNICOLOR (0x00)
 #define REG_BRIGHTNESS (0x01)
@@ -54,9 +61,9 @@
 #define REG_RGB_CONTRAST (0x06)
 
 void setup() {
-  bool iicinit = i2c_init();
   Serial.begin(115200);
   Serial.print("TA1276AN I2C Bridge\n");
+  bool iicinit = i2c_init();
   Wire.begin(TA1276AN_ADDR);
   Wire.onReceive(writeRequest);
   Wire.onRequest(readRequest);
@@ -68,36 +75,10 @@ void loop() {
 }
 
 void writeRegister(const uint8_t reg, const uint8_t val) {
-      i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
-      i2c_write(reg);
-      i2c_write(val);
-      i2c_stop(); 
-}
-
-void writeRequest(int byteCount) {
-  uint8_t reg = Wire.read();
-  uint8_t val = Wire.read();
-  switch(reg) {
-    case REG_RGB_BRIGHTNESS:
-    case REG_RGB_CONTRAST:
-      // Do nothing
-    break;
-    case REG_BRIGHTNESS:
-      writeRegister(reg,val);
-      // Write the same value to RGB Brightness register
-      writeRegister(REG_RGB_BRIGHTNESS,((val>>1)<<1));
-    break;
-    case REG_UNICOLOR:
-      writeRegister(reg,val);
-      // Write the same value to RGB Contrast register
-      // But make sure to kill most significant bit
-      // otherwise picture gets dark (at least for me)
-      writeRegister(REG_RGB_CONTRAST,val & 0x7F);
-    break;
-    default:
-      writeRegister(reg,val);
-    break;
-  }
+  i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
+  i2c_write(reg);
+  i2c_write(val);
+  i2c_stop(); 
 #ifdef SER_DEBUG_WRITE
   Serial.print("Write register: ");
   Serial.print(reg,HEX);
@@ -105,6 +86,81 @@ void writeRequest(int byteCount) {
   Serial.print(val,HEX);
   Serial.print("\n");
 #endif
+}
+
+uint8_t brightness = 0x80;
+uint8_t contrast = 0x80;
+
+void writeRequest(int byteCount) {
+  if(byteCount > 2) {
+    uint8_t reg = Wire.read();
+    uint8_t bc = 1;
+#ifdef SER_DEBUG_WRITE
+    Serial.print("Bulk write: start reg: ");
+    Serial.print(reg,HEX);
+    Serial.print(" ");
+#endif
+    i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
+    i2c_write(reg);
+    do {
+      uint8_t val = Wire.read();
+#ifdef SER_DEBUG_WRITE
+      Serial.print(val,HEX);
+#endif
+      switch(reg) {
+        case REG_RGB_BRIGHTNESS:
+          val = (brightness>>1)<<1; 
+        break;
+        case REG_RGB_CONTRAST:
+          val = contrast & 0x7F;
+        break;
+        case REG_BRIGHTNESS:
+          brightness = val;
+          break;
+        case REG_UNICOLOR:
+          contrast = val;
+        break;
+        default:
+        break;
+      }
+      i2c_write(val);
+#ifdef SER_DEBUG_WRITE
+      Serial.print("(");
+      Serial.print(val,HEX);
+      Serial.print(")");
+#endif
+      ++bc;
+      ++reg;
+    } while(bc < byteCount);
+    i2c_stop();
+#ifdef SER_DEBUG_WRITE
+    Serial.print("\n");
+#endif
+  } else {
+    uint8_t reg = Wire.read();
+    uint8_t val = Wire.read();
+    switch(reg) {
+      case REG_RGB_BRIGHTNESS:
+      case REG_RGB_CONTRAST:
+        // Do nothing
+      break;
+      case REG_BRIGHTNESS:
+        writeRegister(reg,val);
+        // Write the same value to RGB Brightness register
+        writeRegister(REG_RGB_BRIGHTNESS,((val>>1)<<1));
+      break;
+      case REG_UNICOLOR:
+        writeRegister(reg,val);
+        // Write the same value to RGB Contrast register
+        // But make sure to kill most significant bit
+        // otherwise picture gets dark (at least for me)
+        writeRegister(REG_RGB_CONTRAST,val & 0x7F);
+      break;
+      default:
+        writeRegister(reg,val);
+      break;
+    }
+  }
 }
 
 void readRequest() {
