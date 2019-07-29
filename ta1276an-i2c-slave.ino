@@ -13,8 +13,10 @@
  * Connect the main I2C line of the monitors PCB to the 
  * hardware I2C (TWI) pins and then specify the desired
  * secondary I2C pins for the communication to the jungle.
- * A speed Arduino is recommended, for now only tested on
- * a 20MHz atmega2560 clone plus 16MHz Nano v3.0 clone.
+ * A speedy Arduino is recommended, for now only tested on:
+ * - 20MHz atmega2560 clone
+ * - 16MHz Nano v3.0 clone
+ * - 16MHz Mini Pro
  * 
  * Requires the SoftI2CMaster library
  * https://github.com/felias-fogg/SoftI2CMaster
@@ -23,6 +25,7 @@
  * JVC DT-V100CG (initial version)
  * JVC TM-H1375SU (version 1.1)
  * JVC TM-1011G (version 1.1)
+ * JVC TM-H140PN (version 1.1)
  */
 
 // Version 1.1
