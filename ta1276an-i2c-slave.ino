@@ -25,13 +25,16 @@
  * JVC DT-V100CG (initial version)
  * JVC TM-H1375SU (version 1.1)
  * JVC TM-1011G (version 1.1)
- * JVC TM-H140PN (version 1.1)
+ * JVC TM-H140PN (improved stability with 1.2, credit to okgrak for testing)
  */
 
-// Version 1.1
+// Version 1.2
 
-#define I2C_TIMEOUT 1000
-#define I2C_PULLUP 1
+#define DELAY_MS 100
+
+#define I2C_TIMEOUT 10000
+#define I2C_PULLUP 0
+#define I2C_FASTMODE 1
 
 // These work for a Mega2560
 /*
@@ -55,8 +58,6 @@
 // is read (1) or write (0). Thus the address is shifted once
 // to the right to get the "real" address which is then 44h/68
 #define TA1276AN_ADDR (68)
-//#define SER_DEBUG_WRITE
-//#define SER_DEBUG_READ
 
 #define REG_UNICOLOR (0x00)
 #define REG_BRIGHTNESS (0x01)
@@ -73,22 +74,11 @@ void setup() {
   if(!iicinit) Serial.println("I2C init failed");
 }
 
-void loop() {
-  delay(10);
-}
-
 void writeRegister(const uint8_t reg, const uint8_t val) {
   i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
   i2c_write(reg);
   i2c_write(val);
   i2c_stop(); 
-#ifdef SER_DEBUG_WRITE
-  Serial.print("Write register: ");
-  Serial.print(reg,HEX);
-  Serial.print(" value: ");
-  Serial.print(val,HEX);
-  Serial.print("\n");
-#endif
 }
 
 uint8_t brightness = 0x80;
@@ -98,18 +88,10 @@ void writeRequest(int byteCount) {
   if(byteCount > 2) {
     uint8_t reg = Wire.read();
     uint8_t bc = 1;
-#ifdef SER_DEBUG_WRITE
-    Serial.print("Bulk write: start reg: ");
-    Serial.print(reg,HEX);
-    Serial.print(" ");
-#endif
     i2c_start((TA1276AN_ADDR<<1)|I2C_WRITE);
     i2c_write(reg);
     do {
       uint8_t val = Wire.read();
-#ifdef SER_DEBUG_WRITE
-      Serial.print(val,HEX);
-#endif
       switch(reg) {
         case REG_RGB_BRIGHTNESS:
           val = (brightness>>1)<<1; 
@@ -127,18 +109,10 @@ void writeRequest(int byteCount) {
         break;
       }
       i2c_write(val);
-#ifdef SER_DEBUG_WRITE
-      Serial.print("(");
-      Serial.print(val,HEX);
-      Serial.print(")");
-#endif
       ++bc;
       ++reg;
     } while(bc < byteCount);
     i2c_stop();
-#ifdef SER_DEBUG_WRITE
-    Serial.print("\n");
-#endif
   } else {
     uint8_t reg = Wire.read();
     uint8_t val = Wire.read();
@@ -166,22 +140,22 @@ void writeRequest(int byteCount) {
   }
 }
 
+uint8_t r[2] = {0, 0};
+
 void readRequest() {
-  // Read requests to TA1276AN returns two bytes
-  // So we read those and replies. One would think
-  // this could give timing errors, but at least
-  // on atmega2560 @ 20MHz it doesn't
-  uint8_t r[2];
+  Wire.write(r,2);
+}
+
+void read() {
   i2c_start((TA1276AN_ADDR<<1)|I2C_READ);
   r[0] = i2c_read(false); // read one byte
   r[1] = i2c_read(true); // read one byte and send NAK to terminate
   i2c_stop(); // send stop condition
-  Wire.write(r,2);
-#ifdef SER_DEBUG_READ
-  Serial.print("Read ");
-  Serial.print(r[0],HEX);
-  Serial.print(",");
-  Serial.print(r[1],HEX);
-  Serial.print("\n");
-#endif
+}
+
+void loop() {
+  noInterrupts();
+  read();
+  interrupts();
+  delay(DELAY_MS);
 }
