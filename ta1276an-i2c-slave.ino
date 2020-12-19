@@ -25,12 +25,12 @@
  * JVC DT-V100CG (initial version)
  * JVC TM-H1375SU (version 1.1)
  * JVC TM-1011G (version 1.1)
- * JVC TM-H140PN (version 1.1)
+ * JVC TM-H140PN (improved stability with 1.2, credit to okgrak for testing)
  */
 
-// Version 1.2 test
+// Version 1.2
 
-#define DELAY_MS 1000
+#define DELAY_MS 100
 
 #define I2C_TIMEOUT 10000
 #define I2C_PULLUP 0
